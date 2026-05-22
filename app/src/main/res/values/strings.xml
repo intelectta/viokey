@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VioletFlame Key</string>
+    <string name="accessibility_service_description">Detects long press on Volume Up and writes violetflame into the focused text field.</string>
+</resources>
