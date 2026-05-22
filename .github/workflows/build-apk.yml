@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Signed Android APK
 
 on:
   workflow_dispatch:
@@ -27,23 +27,48 @@ jobs:
         with:
           gradle-version: 8.10.2
 
-      - name: Show project files
+      - name: Create temporary signing key
         run: |
-          pwd
-          ls -la
-          find . -maxdepth 4 -type f | sort
+          keytool -genkeypair \
+            -v \
+            -keystore violetflame-release-key.jks \
+            -storepass violetflame123 \
+            -keypass violetflame123 \
+            -alias violetflame \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=VioletFlameKey, OU=Intelectta, O=Intelectta, L=Sao Leopoldo, S=RS, C=BR"
 
-      - name: Build release APK
+      - name: Build unsigned release APK
         run: gradle assembleRelease --stacktrace
 
-      - name: Find APK files
-        run: |
-          echo "Searching APK files..."
-          find . -type f -name "*.apk" -print
+      - name: Find unsigned APK
+        run: find . -type f -name "*.apk" -print
 
-      - name: Upload release APK artifact
+      - name: Align APK
+        run: |
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign | sort | tail -n 1)
+          $ZIPALIGN -p -f 4 app/build/outputs/apk/release/app-release-unsigned.apk app-release-aligned.apk
+
+      - name: Sign APK
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -n 1)
+          $APKSIGNER sign \
+            --ks violetflame-release-key.jks \
+            --ks-pass pass:violetflame123 \
+            --key-pass pass:violetflame123 \
+            --out VioletFlameKey-signed-release.apk \
+            app-release-aligned.apk
+
+      - name: Verify signed APK
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -n 1)
+          $APKSIGNER verify --verbose VioletFlameKey-signed-release.apk
+
+      - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VioletFlameKey-release-apk
-          path: "**/*.apk"
+          name: VioletFlameKey-signed-release-apk
+          path: VioletFlameKey-signed-release.apk
           if-no-files-found: error
